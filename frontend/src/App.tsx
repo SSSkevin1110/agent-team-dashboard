@@ -5,8 +5,9 @@ import { AgentManager } from './components/AgentManager'
 import { TaskPanel } from './components/TaskPanel'
 import { TeamView } from './components/TeamView'
 import { AgentGame } from './components/AgentGame'
+import { PaperAnalyzer } from './components/PaperAnalyzer'
 
-type Tab = 'dashboard' | 'agents' | 'tasks' | 'team' | 'game' | 'settings'
+type Tab = 'dashboard' | 'agents' | 'tasks' | 'team' | 'game' | 'paper' | 'settings'
 
 const ComingSoon: React.FC<{ title: string }> = ({ title }) => (
   <div className="flex flex-col items-center justify-center h-full text-center">
@@ -21,7 +22,7 @@ const ComingSoon: React.FC<{ title: string }> = ({ title }) => (
 )
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard')
+  const [activeTab, setActiveTab] = useState<Tab>('paper')
 
   const renderContent = () => {
     switch (activeTab) {
@@ -35,6 +36,8 @@ function App() {
         return <TeamView />
       case 'game':
         return <AgentGame />
+      case 'paper':
+        return <PaperAnalyzer />
       case 'settings':
         return <ComingSoon title="设置" />
       default:

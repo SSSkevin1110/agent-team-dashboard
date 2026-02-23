@@ -11,7 +11,6 @@ export interface Agent {
   color: string
   description: string
   status: AgentStatus
-  // 统计信息
   stats: {
     totalTokens: number
     inputTokens: number
@@ -19,9 +18,9 @@ export interface Agent {
     totalTasks: number
     completedTasks: number
     failedTasks: number
-    totalRuntime: number // 秒
+    totalRuntime: number
     totalSessions: number
-    lastActive: number // timestamp
+    lastActive: number
   }
 }
 
@@ -34,141 +33,132 @@ export interface Task {
   priority: 'low' | 'medium' | 'high'
 }
 
+// 论文分析相关类型
+export interface Paper {
+  id: string
+  title: string
+  authors: string[]
+  abstract: string
+  url?: string
+  publishedDate?: string
+  keywords: string[]
+  // 分析结果
+  analysis?: {
+    researchGoal: string
+    methodology: string
+    contributions: string[]
+    results: string
+    pros: string[]
+    cons: string[]
+    scores: {
+      innovation: number
+      completeness: number
+      practicality: number
+    }
+  }
+  status: 'pending' | 'analyzing' | 'completed'
+  createdAt: number
+}
+
 interface AgentStore {
   agents: Agent[]
   tasks: Task[]
+  papers: Paper[]
   addAgent: (agent: Omit<Agent, 'id' | 'stats'>) => void
   updateAgent: (id: string, agent: Partial<Agent>) => void
   deleteAgent: (id: string) => void
   addTask: (task: Omit<Task, 'id'>) => void
   updateTask: (id: string, task: Partial<Task>) => void
   deleteTask: (id: string) => void
-  // 更新 Agent 统计
   updateAgentStats: (id: string, stats: Partial<Agent['stats']>) => void
+  // 论文相关
+  addPaper: (paper: Omit<Paper, 'id' | 'createdAt' | 'status'>) => void
+  updatePaper: (id: string, paper: Partial<Paper>) => void
+  deletePaper: (id: string) => void
 }
 
-// 预置的一些 Agent
-const defaultAgents: Agent[] = [
+// 论文分析 Agent 团队
+const paperTeamAgents: Agent[] = [
   {
     id: '1',
-    name: 'Pixel Master',
-    role: '前端工程师',
-    avatar: '🎨',
+    name: 'Paper Reader',
+    role: '论文读取',
+    avatar: '📖',
     color: '#8b5cf6',
-    description: '擅长像素艺术和前端开发',
+    description: '负责读取论文内容，支持 PDF 和 URL',
     status: 'online',
-    stats: {
-      totalTokens: 125000,
-      inputTokens: 45000,
-      outputTokens: 80000,
-      totalTasks: 24,
-      completedTasks: 21,
-      failedTasks: 1,
-      totalRuntime: 3600,
-      totalSessions: 18,
-      lastActive: Date.now()
-    }
+    stats: { totalTokens: 25000, inputTokens: 15000, outputTokens: 10000, totalTasks: 5, completedTasks: 5, failedTasks: 0, totalRuntime: 500, totalSessions: 5, lastActive: Date.now() }
   },
   {
     id: '2',
-    name: 'Logic Core',
-    role: '后端工程师',
-    avatar: '⚙️',
+    name: 'Analyzer',
+    role: '深度分析',
+    avatar: '🔬',
     color: '#3b82f6',
-    description: '擅长逻辑和后端架构',
-    status: 'working',
-    stats: {
-      totalTokens: 98000,
-      inputTokens: 38000,
-      outputTokens: 60000,
-      totalTasks: 18,
-      completedTasks: 16,
-      failedTasks: 0,
-      totalRuntime: 2800,
-      totalSessions: 14,
-      lastActive: Date.now()
-    }
+    description: '分析论文内容，提取关键信息',
+    status: 'online',
+    stats: { totalTokens: 45000, inputTokens: 20000, outputTokens: 25000, totalTasks: 4, completedTasks: 4, failedTasks: 0, totalRuntime: 800, totalSessions: 4, lastActive: Date.now() }
   },
   {
     id: '3',
-    name: 'Bug Hunter',
-    role: '测试工程师',
-    avatar: '🔍',
-    color: '#22c55e',
-    description: '找 Bug 小能手',
+    name: 'Critic',
+    role: '质量评估',
+    avatar: '⭐',
+    color: '#f59e0b',
+    description: '评估论文质量和创新点',
     status: 'online',
-    stats: {
-      totalTokens: 45000,
-      inputTokens: 18000,
-      outputTokens: 27000,
-      totalTasks: 12,
-      completedTasks: 10,
-      failedTasks: 2,
-      totalRuntime: 1500,
-      totalSessions: 8,
-      lastActive: Date.now() - 3600000
-    }
+    stats: { totalTokens: 18000, inputTokens: 8000, outputTokens: 10000, totalTasks: 3, completedTasks: 3, failedTasks: 0, totalRuntime: 300, totalSessions: 3, lastActive: Date.now() }
   },
   {
     id: '4',
-    name: 'Design Bot',
-    role: 'UI/UX 设计师',
-    avatar: '✨',
-    color: '#ec4899',
-    description: '追求完美的设计',
+    name: 'Reporter',
+    role: '报告生成',
+    avatar: '📝',
+    color: '#10b981',
+    description: '生成结构化分析报告',
     status: 'online',
-    stats: {
-      totalTokens: 67000,
-      inputTokens: 25000,
-      outputTokens: 42000,
-      totalTasks: 15,
-      completedTasks: 14,
-      failedTasks: 0,
-      totalRuntime: 2100,
-      totalSessions: 12,
-      lastActive: Date.now()
-    }
+    stats: { totalTokens: 12000, inputTokens: 5000, outputTokens: 7000, totalTasks: 3, completedTasks: 3, failedTasks: 0, totalRuntime: 200, totalSessions: 3, lastActive: Date.now() }
   }
 ]
 
 const defaultTasks: Task[] = [
   {
     id: '1',
-    title: '搭建 Agent Dashboard',
-    description: '创建任务台基础框架',
-    assignedTo: ['1', '2'],
+    title: '搭建论文分析网页基础框架',
+    description: '创建 React 项目结构，论文输入组件',
+    assignedTo: ['1'],
     status: 'in_progress',
     priority: 'high'
   },
   {
     id: '2',
-    title: '设计像素工牌',
-    description: '为每个 Agent 设计独特的像素风格工牌',
-    assignedTo: ['4'],
-    status: 'completed',
-    priority: 'medium'
-  },
-  {
-    id: '3',
-    title: '实现任务分配',
-    description: '开发任务分配给 Agent 的功能',
-    assignedTo: ['2'],
-    status: 'completed',
+    title: '实现 PDF 和 URL 解析功能',
+    description: '支持 arXiv 和 PDF 文件上传解析',
+    assignedTo: ['1'],
+    status: 'pending',
     priority: 'high'
   },
   {
-    id: '4',
-    title: '优化塔防游戏',
-    description: '增加连击系统和波次系统',
-    assignedTo: ['1', '2'],
+    id: '3',
+    title: '开发论文分析 UI 组件',
+    description: '论文卡片、分析结果展示组件',
+    assignedTo: ['2'],
     status: 'pending',
     priority: 'medium'
   },
   {
+    id: '4',
+    title: '实现深度分析功能',
+    description: 'AI 分析论文结构和内容',
+    assignedTo: ['2', '3'],
+    status: 'pending',
+    priority: 'high'
+  },
+  {
     id: '5',
-    title: '编写测试用例',
-    description: '为新功能编写单元测试',
-    assignedTo: ['3'],
+    title: '添加报告导出功能',
+    description: 'Markdown 报告生成和下载',
+    assignedTo: ['4'],
     status: 'pending',
     priority: 'low'
   }
@@ -177,23 +167,14 @@ const defaultTasks: Task[] = [
 export const useAgentStore = create<AgentStore>()(
   persist(
     (set) => ({
-      agents: defaultAgents,
+      agents: paperTeamAgents,
       tasks: defaultTasks,
+      papers: [],
       addAgent: (agent) => set((state) => ({
         agents: [...state.agents, { 
           ...agent, 
           id: Date.now().toString(),
-          stats: {
-            totalTokens: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-            totalTasks: 0,
-            completedTasks: 0,
-            failedTasks: 0,
-            totalRuntime: 0,
-            totalSessions: 0,
-            lastActive: Date.now()
-          }
+          stats: { totalTokens: 0, inputTokens: 0, outputTokens: 0, totalTasks: 0, completedTasks: 0, failedTasks: 0, totalRuntime: 0, totalSessions: 0, lastActive: Date.now() }
         }]
       })),
       updateAgent: (id, agent) => set((state) => ({
@@ -212,10 +193,16 @@ export const useAgentStore = create<AgentStore>()(
         tasks: state.tasks.filter((t) => t.id !== id)
       })),
       updateAgentStats: (id, stats) => set((state) => ({
-        agents: state.agents.map((a) => a.id === id ? { 
-          ...a, 
-          stats: { ...a.stats, ...stats, lastActive: Date.now() }
-        } : a)
+        agents: state.agents.map((a) => a.id === id ? { ...a, stats: { ...a.stats, ...stats, lastActive: Date.now() }} : a)
+      })),
+      addPaper: (paper) => set((state) => ({
+        papers: [...state.papers, { ...paper, id: Date.now().toString(), status: 'pending', createdAt: Date.now() }]
+      })),
+      updatePaper: (id, paper) => set((state) => ({
+        papers: state.papers.map((p) => p.id === id ? { ...p, ...paper } : p)
+      })),
+      deletePaper: (id) => set((state) => ({
+        papers: state.papers.filter((p) => p.id !== id)
       }))
     }),
     {

@@ -1,7 +1,7 @@
 import React from 'react'
-import { LayoutDashboard, Bot, CheckSquare, Network, Gamepad2, Settings } from 'lucide-react'
+import { LayoutDashboard, Bot, CheckSquare, Network, Gamepad2, BookOpen, Settings } from 'lucide-react'
 
-type Tab = 'dashboard' | 'agents' | 'tasks' | 'team' | 'game' | 'settings'
+type Tab = 'dashboard' | 'agents' | 'tasks' | 'team' | 'game' | 'paper' | 'settings'
 
 interface SidebarProps {
   activeTab: Tab
@@ -9,7 +9,8 @@ interface SidebarProps {
 }
 
 const tabs = [
-  { id: 'dashboard', label: '仪表盘', icon: LayoutDashboard },
+  { id: 'dashboard', label: '控制台', icon: LayoutDashboard },
+  { id: 'paper', label: '论文分析', icon: BookOpen },
   { id: 'agents', label: 'Agent 团队', icon: Bot },
   { id: 'tasks', label: '任务面板', icon: CheckSquare },
   { id: 'team', label: '团队视图', icon: Network },
@@ -28,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           </div>
           <div>
             <h1 className="font-bold text-white">Agent Team</h1>
-            <p className="text-xs text-gray-500">任务台 v0.1</p>
+            <p className="text-xs text-gray-500">任务台 v1.0</p>
           </div>
         </div>
       </div>
