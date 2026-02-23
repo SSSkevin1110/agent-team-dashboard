@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export type AgentStatus = 'online' | 'offline' | 'working'
 
@@ -72,50 +73,59 @@ const defaultAgents: Agent[] = [
   }
 ]
 
-export const useAgentStore = create<AgentStore>((set) => ({
-  agents: defaultAgents,
-  tasks: [
+const defaultTasks: Task[] = [
+  {
+    id: '1',
+    title: '搭建 Agent Dashboard',
+    description: '创建任务台基础框架',
+    assignedTo: ['1', '2'],
+    status: 'in_progress',
+    priority: 'high'
+  },
+  {
+    id: '2',
+    title: '设计像素工牌',
+    description: '为每个 Agent 设计独特的像素风格工牌',
+    assignedTo: ['4'],
+    status: 'pending',
+    priority: 'medium'
+  },
+  {
+    id: '3',
+    title: '实现任务分配',
+    description: '开发任务分配给 Agent 的功能',
+    assignedTo: ['2'],
+    status: 'pending',
+    priority: 'high'
+  }
+]
+
+export const useAgentStore = create<AgentStore>()(
+  persist(
+    (set) => ({
+      agents: defaultAgents,
+      tasks: defaultTasks,
+      addAgent: (agent) => set((state) => ({
+        agents: [...state.agents, { ...agent, id: Date.now().toString() }]
+      })),
+      updateAgent: (id, agent) => set((state) => ({
+        agents: state.agents.map((a) => a.id === id ? { ...a, ...agent } : a)
+      })),
+      deleteAgent: (id) => set((state) => ({
+        agents: state.agents.filter((a) => a.id !== id)
+      })),
+      addTask: (task) => set((state) => ({
+        tasks: [...state.tasks, { ...task, id: Date.now().toString() }]
+      })),
+      updateTask: (id, task) => set((state) => ({
+        tasks: state.tasks.map((t) => t.id === id ? { ...t, ...task } : t)
+      })),
+      deleteTask: (id) => set((state) => ({
+        tasks: state.tasks.filter((t) => t.id !== id)
+      }))
+    }),
     {
-      id: '1',
-      title: '搭建 Agent Dashboard',
-      description: '创建任务台基础框架',
-      assignedTo: ['1', '2'],
-      status: 'in_progress',
-      priority: 'high'
-    },
-    {
-      id: '2',
-      title: '设计像素工牌',
-      description: '为每个 Agent 设计独特的像素风格工牌',
-      assignedTo: ['4'],
-      status: 'pending',
-      priority: 'medium'
-    },
-    {
-      id: '3',
-      title: '实现任务分配',
-      description: '开发任务分配给 Agent 的功能',
-      assignedTo: ['2'],
-      status: 'pending',
-      priority: 'high'
+      name: 'agent-team-storage'
     }
-  ],
-  addAgent: (agent) => set((state) => ({
-    agents: [...state.agents, { ...agent, id: Date.now().toString() }]
-  })),
-  updateAgent: (id, agent) => set((state) => ({
-    agents: state.agents.map((a) => a.id === id ? { ...a, ...agent } : a)
-  })),
-  deleteAgent: (id) => set((state) => ({
-    agents: state.agents.filter((a) => a.id !== id)
-  })),
-  addTask: (task) => set((state) => ({
-    tasks: [...state.tasks, { ...task, id: Date.now().toString() }]
-  })),
-  updateTask: (id, task) => set((state) => ({
-    tasks: state.tasks.map((t) => t.id === id ? { ...t, ...task } : t)
-  })),
-  deleteTask: (id) => set((state) => ({
-    tasks: state.tasks.filter((t) => t.id !== id)
-  }))
-}))
+  )
+)

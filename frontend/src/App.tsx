@@ -4,6 +4,7 @@ import { Dashboard } from './components/Dashboard'
 import { AgentManager } from './components/AgentManager'
 import { TaskPanel } from './components/TaskPanel'
 import { TeamView } from './components/TeamView'
+import { AgentGame } from './components/AgentGame'
 
 type Tab = 'dashboard' | 'agents' | 'tasks' | 'team' | 'game' | 'settings'
 
@@ -33,7 +34,7 @@ function App() {
       case 'team':
         return <TeamView />
       case 'game':
-        return <ComingSoon title="小游戏" />
+        return <AgentGame />
       case 'settings':
         return <ComingSoon title="设置" />
       default:
