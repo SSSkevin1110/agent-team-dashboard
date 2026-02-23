@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAgentStore } from '../store/agentStore'
 import { PixelAvatar } from './PixelAvatar'
-import { Target, Play, Pause, RotateCcw } from 'lucide-react'
+import { Target, Play, Pause, RotateCcw, Zap, Star, Award } from 'lucide-react'
 
 interface GameEntity {
   id: string
@@ -26,79 +26,106 @@ interface Projectile {
   agentId: string
 }
 
-// 简单的 Agent 塔防游戏
+interface FloatingText {
+  id: string
+  x: number
+  y: number
+  text: string
+  color: string
+  vy: number
+}
+
+// 增强版 Agent 塔防游戏
 export const AgentGame: React.FC = () => {
   const { agents } = useAgentStore()
   const [gameState, setGameState] = useState<'idle' | 'playing' | 'paused' | 'gameover'>('idle')
   const [score, setScore] = useState(0)
+  const [highScore, setHighScore] = useState(() => {
+    return parseInt(localStorage.getItem('agentGameHighScore') || '0')
+  })
   const [wave, setWave] = useState(1)
   const [entities, setEntities] = useState<GameEntity[]>([])
   const [projectiles, setProjectiles] = useState<Projectile[]>([])
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([])
   const [money, setMoney] = useState(100)
   const [selectedAgents, setSelectedAgents] = useState<string[]>([])
+  const [combo, setCombo] = useState(0)
+  const [lastKillTime, setLastKillTime] = useState(0)
+  
+  // 保存最高分
+  useEffect(() => {
+    if (score > highScore) {
+      setHighScore(score)
+      localStorage.setItem('agentGameHighScore', score.toString())
+    }
+  }, [score, highScore])
   
   // 游戏循环
   useEffect(() => {
     if (gameState !== 'playing') return
     
     const interval = setInterval(() => {
+      const now = Date.now()
+      
       // 生成敌人
-      if (Math.random() < 0.02 * wave) {
+      if (Math.random() < 0.02 * (1 + wave * 0.15)) {
         const newBug: GameEntity = {
-          id: `bug-${Date.now()}`,
-          x: Math.random() * 360 + 20,
-          y: 520,
+          id: `bug-${Date.now()}-${Math.random()}`,
+          x: Math.random() * 340 + 30,
+          y: 560,
           type: 'bug',
-          hp: 20 + wave * 10,
-          maxHp: 20 + wave * 10,
-          damage: 5 + wave * 2,
+          hp: 15 + wave * 10,
+          maxHp: 15 + wave * 10,
+          damage: 3 + wave * 2,
           speed: 0.5 + wave * 0.1
         }
         setEntities(prev => [...prev, newBug])
       }
       
-      // 移动敌人
+      // 移动实体
       setEntities(prev => prev.map(e => {
         if (e.type === 'bug') {
           return { ...e, y: e.y - e.speed }
         }
         return e
       }).filter(e => {
-        // 检查敌人是否到达底部
-        if (e.type === 'bug' && e.y < 0) {
-          setGameState('gameover')
+        if (e.type === 'bug' && e.y < -20) {
+          if (e.hp > 0) {
+            setGameState('gameover')
+          }
           return false
         }
         return true
       }))
       
-      // 敌人攻击
-      entities.forEach(entity => {
-        if (entity.type === 'bug') {
-          // 找到最近的 Agent
-          const agents = entities.filter(e => e.type === 'agent')
-          if (agents.length > 0) {
-            const nearest = agents.reduce((nearest, agent) => {
-              const dist = Math.abs(agent.x - entity.x) + Math.abs(agent.y - entity.y)
-              const nearestDist = Math.abs(nearest.x - entity.x) + Math.abs(nearest.y - entity.y)
-              return dist < nearestDist ? agent : nearest
-            })
-            
-            if (Math.abs(nearest.x - entity.x) + Math.abs(nearest.y - entity.y) < 50) {
-              // 攻击 Agent
-              setEntities(prev => prev.map(a => {
-                if (a.id === nearest.id) {
-                  return { ...a, hp: a.hp - entity.damage }
-                }
-                return a
-              }).filter(a => a.hp > 0))
-            }
-          }
-        }
-      })
+      // 敌人攻击 Agent
+      const bugs = entities.filter(e => e.type === 'bug')
+      const gameAgents = entities.filter(e => e.type === 'agent')
       
-      // 移除死亡的实体
-      setEntities(prev => prev.filter(e => e.hp > 0))
+      bugs.forEach(bug => {
+        gameAgents.forEach(agent => {
+          const dist = Math.sqrt((agent.x - bug.x) ** 2 + (agent.y - bug.y) ** 2)
+          if (dist < 40 && bug.hp > 0) {
+            setEntities(prev => prev.map(a => {
+              if (a.id === agent.id) {
+                const newHp = a.hp - bug.damage
+                return { ...a, hp: newHp }
+              }
+              return a
+            }).filter(a => a.hp > 0))
+            
+            const floatText: FloatingText = {
+              id: `dmg-${Date.now()}`,
+              x: agent.x,
+              y: agent.y - 30,
+              text: `-${bug.damage}`,
+              color: '#ef4444',
+              vy: -1
+            }
+            setFloatingTexts(prev => [...prev, floatText])
+          }
+        })
+      })
       
       // 移动子弹
       setProjectiles(prev => prev.map(p => {
@@ -109,8 +136,8 @@ export const AgentGame: React.FC = () => {
         
         return {
           ...p,
-          x: p.x + (dx / dist) * 8,
-          y: p.y + (dy / dist) * 8
+          x: p.x + (dx / dist) * 10,
+          y: p.y + (dy / dist) * 10
         }
       }).filter(Boolean) as Projectile[])
       
@@ -121,24 +148,46 @@ export const AgentGame: React.FC = () => {
         
         prev.forEach(p => {
           entities.forEach(e => {
-            if (e.type === 'bug') {
+            if (e.type === 'bug' && e.hp > 0) {
               const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2)
-              if (dist < 20) {
+              if (dist < 18) {
                 hitIds.push(p.id)
                 hitBugIds.push(e.id)
-                setScore(s => s + 10)
-                setMoney(m => m + 5)
+                
+                if (now - lastKillTime < 1500) {
+                  setCombo(c => c + 1)
+                } else {
+                  setCombo(1)
+                }
+                setLastKillTime(now)
+                
+                const baseScore = 10
+                const comboBonus = Math.min(combo * 2, 20)
+                const waveBonus = wave * 2
+                const totalScore = baseScore + comboBonus + waveBonus
+                
+                setScore(s => s + totalScore)
+                setMoney(m => m + 3 + Math.floor(combo / 3))
+                
+                const floatText: FloatingText = {
+                  id: `score-${Date.now()}`,
+                  x: e.x,
+                  y: e.y,
+                  text: `+${totalScore}`,
+                  color: combo > 3 ? '#fbbf24' : '#22c55e',
+                  vy: -1.5
+                }
+                setFloatingTexts(prev => [...prev, floatText])
               }
             }
           })
         })
         
-        // 扣血
         if (hitBugIds.length > 0) {
-          const projectile = prev.find(p => p.id === hitBugIds[0])
-          const damage = projectile?.damage || 0
           setEntities(prev => prev.map(e => {
             if (hitBugIds.includes(e.id)) {
+              const proj = prev.find(p => hitIds.includes(p.id))
+              const damage = proj?.damage || 10
               return { ...e, hp: e.hp - damage }
             }
             return e
@@ -148,32 +197,50 @@ export const AgentGame: React.FC = () => {
         return prev.filter(p => !hitIds.includes(p.id))
       })
       
-    }, 50)
+      setFloatingTexts(prev => prev.map(t => ({
+        ...t,
+        y: t.y + t.vy
+      })).filter(t => t.y > -30))
+      
+      setEntities(prev => prev.filter(e => e.hp > 0))
+      
+    }, 33)
     
     return () => clearInterval(interval)
-  }, [gameState, wave, entities])
+  }, [gameState, wave, entities, combo, lastKillTime])
+  
+  useEffect(() => {
+    if (gameState !== 'playing') return
+    
+    const waveInterval = setInterval(() => {
+      setWave(w => w + 1)
+    }, 30000)
+    
+    return () => clearInterval(waveInterval)
+  }, [gameState])
   
   const startGame = () => {
-    // 放置选中的 Agent
     const gameAgents: GameEntity[] = selectedAgents.map((id, index) => {
       return {
         id: `game-${id}`,
-        x: 60 + index * 100,
-        y: 80,
-        type: 'agent',
+        x: 60 + index * (340 / Math.max(selectedAgents.length, 1)),
+        y: 60,
+        type: 'agent' as const,
         agentId: id,
         hp: 100,
         maxHp: 100,
-        damage: 10,
+        damage: 12,
         speed: 0
       }
     })
     
     setEntities(gameAgents)
     setProjectiles([])
+    setFloatingTexts([])
     setScore(0)
     setWave(1)
     setMoney(100)
+    setCombo(0)
     setGameState('playing')
   }
   
@@ -183,7 +250,6 @@ export const AgentGame: React.FC = () => {
     const agent = entities.find(e => e.agentId === agentId)
     if (!agent) return
     
-    // 找到最近的敌人
     const bugs = entities.filter(e => e.type === 'bug')
     if (bugs.length === 0) return
     
@@ -210,22 +276,21 @@ export const AgentGame: React.FC = () => {
   }
   
   const toggleAgentSelection = (agentId: string) => {
+    if (gameState !== 'idle') return
     setSelectedAgents(prev => 
       prev.includes(agentId) 
         ? prev.filter(id => id !== agentId)
-        : [...prev, agentId]
+        : prev.length < 4 ? [...prev, agentId] : prev
     )
   }
   
-  // 渲染游戏区域
   const renderGame = () => (
     <div 
       className="relative bg-[#0f0f1a] rounded-xl overflow-hidden"
-      style={{ width: 400, height: 560 }}
+      style={{ width: 400, height: 600 }}
     >
-      {/* 游戏区域背景 */}
       <div 
-        className="absolute inset-0 opacity-10"
+        className="absolute inset-0 opacity-15"
         style={{
           backgroundImage: `
             linear-gradient(#8b5cf6 1px, transparent 1px),
@@ -235,7 +300,19 @@ export const AgentGame: React.FC = () => {
         }}
       />
       
-      {/* 实体 */}
+      {Array.from({ length: 30 }).map((_, i) => (
+        <div
+          key={i}
+          className="absolute w-1 h-1 bg-white rounded-full animate-pulse"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            opacity: Math.random() * 0.5 + 0.3,
+            animationDelay: `${Math.random() * 2}s`
+          }}
+        />
+      ))}
+      
       {entities.map(entity => (
         <div
           key={entity.id}
@@ -252,21 +329,19 @@ export const AgentGame: React.FC = () => {
                 size="md"
                 color={agents.find(a => a.id === entity.agentId)?.color}
               />
-              {/* 血条 */}
-              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gray-700 rounded">
+              <div className="absolute -bottom-1 left-0 right-0 h-1.5 bg-gray-700 rounded">
                 <div 
-                  className="h-full bg-green-500 rounded"
+                  className="h-full bg-green-500 rounded transition-all"
                   style={{ width: `${(entity.hp / entity.maxHp) * 100}%` }}
                 />
               </div>
             </div>
           ) : (
-            <div className="text-3xl">🐛</div>
+            <div className="text-3xl filter drop-shadow-lg">🐛</div>
           )}
         </div>
       ))}
       
-      {/* 子弹 */}
       {projectiles.map(p => (
         <div
           key={p.id}
@@ -275,50 +350,87 @@ export const AgentGame: React.FC = () => {
             left: p.x,
             top: p.y,
             backgroundColor: p.color,
-            boxShadow: `0 0 10px ${p.color}`,
+            boxShadow: `0 0 12px ${p.color}, 0 0 4px ${p.color}`,
             transform: 'translate(-50%, -50%)'
           }}
         />
       ))}
       
-      {/* 游戏状态 */}
+      {floatingTexts.map(t => (
+        <div
+          key={t.id}
+          className="absolute font-bold text-sm pointer-events-none"
+          style={{
+            left: t.x,
+            top: t.y,
+            color: t.color,
+            textShadow: `0 0 10px ${t.color}`
+          }}
+        >
+          {t.text}
+        </div>
+      ))}
+      
       {gameState === 'gameover' && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/85 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-4xl mb-4">💀</p>
-            <p className="text-white text-xl font-bold">游戏结束</p>
-            <p className="text-gray-400">得分: {score}</p>
+            <p className="text-5xl mb-4">💀</p>
+            <p className="text-white text-2xl font-bold mb-2">游戏结束</p>
+            <p className="text-gray-400 mb-1">得分: <span className="text-yellow-400">{score}</span></p>
+            <p className="text-gray-500 text-sm">最高分: {highScore}</p>
+            {score >= highScore && score > 0 && (
+              <p className="text-yellow-400 mt-2">🎉 新纪录!</p>
+            )}
           </div>
         </div>
       )}
       
-      {/* 底部状态栏 */}
-      <div className="absolute bottom-0 left-0 right-0 bg-[#1a1a2e] p-3 flex justify-between items-center">
-        <div className="text-green-400 font-bold">💰 {money}</div>
-        <div className="text-purple-400 font-bold">波次: {wave}</div>
-        <div className="text-yellow-400 font-bold">⭐ {score}</div>
+      {gameState === 'paused' && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-4xl mb-4">⏸️</p>
+            <p className="text-white text-xl font-bold">暂停中</p>
+          </div>
+        </div>
+      )}
+      
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#1a1a2e] to-transparent p-3 pt-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1 text-green-400 font-bold">
+            <Star className="w-4 h-4" /> {money}
+          </div>
+          <div className="flex items-center gap-1 text-purple-400 font-bold">
+            <Target className="w-4 h-4" /> 波次 {wave}
+          </div>
+          <div className="flex items-center gap-1 text-yellow-400 font-bold">
+            <Zap className="w-4 h-4" /> {score}
+          </div>
+          {combo > 2 && (
+            <div className="flex items-center gap-1 text-orange-400 font-bold animate-pulse">
+              <Award className="w-4 h-4" /> x{combo}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
   
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
           <span className="text-2xl">🎮</span>
         </div>
         <div>
           <h2 className="text-2xl font-bold text-white">Agent 塔防</h2>
-          <p className="text-gray-400 text-sm">选择 Agent 参与游戏</p>
+          <p className="text-gray-400 text-sm">最高分: {highScore}</p>
         </div>
       </div>
       
-      {/* Agent 选择 */}
       <div className="bg-[#1a1a2e] rounded-xl p-4 border border-gray-800">
         <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
           <Target className="w-4 h-4 text-purple-400" />
-          选择参战 Agent
+          选择参战 Agent (最多4个)
         </h3>
         <div className="grid grid-cols-4 gap-2">
           {agents.map(agent => (
@@ -329,7 +441,7 @@ export const AgentGame: React.FC = () => {
                 selectedAgents.includes(agent.id)
                   ? 'bg-purple-600/30 border-2 border-purple-500'
                   : 'bg-[#0f0f1a] border-2 border-transparent hover:border-gray-700'
-              }`}
+              } ${gameState !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <PixelAvatar emoji={agent.avatar} size="sm" color={agent.color} />
               <p className="text-white text-xs text-center mt-1 truncate">{agent.name}</p>
@@ -338,8 +450,7 @@ export const AgentGame: React.FC = () => {
         </div>
       </div>
       
-      {/* 游戏控制 */}
-      <div className="flex justify-center gap-4">
+      <div className="flex justify-center gap-3">
         {gameState === 'idle' && (
           <button
             onClick={startGame}
@@ -373,28 +484,26 @@ export const AgentGame: React.FC = () => {
         
         {(gameState === 'paused' || gameState === 'gameover') && (
           <button
-            onClick={() => setGameState('idle')}
+            onClick={() => { setGameState('idle'); setSelectedAgents([]); }}
             className="flex items-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-xl font-bold"
           >
             <RotateCcw className="w-5 h-5" />
-            重新开始
+            重新选择
           </button>
         )}
       </div>
       
-      {/* 游戏区域 */}
       <div className="flex justify-center">
         {renderGame()}
       </div>
       
-      {/* 说明 */}
       <div className="bg-[#1a1a2e] rounded-xl p-4 border border-gray-800">
         <h4 className="text-white font-semibold mb-2">🎯 游戏说明</h4>
         <ul className="text-gray-400 text-sm space-y-1">
           <li>• 选择 1-4 个 Agent 参与游戏</li>
-          <li>• 点击 Agent 可以发射攻击</li>
+          <li>• 点击 Agent 发射攻击</li>
           <li>• 阻止 Bug 到达底部</li>
-          <li>• 击杀 Bug 获得金币和分数</li>
+          <li>• 连续击杀获得连击加分</li>
           <li>• 波次越高，敌人越强</li>
         </ul>
       </div>
