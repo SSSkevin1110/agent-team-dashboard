@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAgentStore, type Paper } from '../store/agentStore'
 import { 
   FileText, Link, Upload, Loader2, Trash2, Download, 
@@ -6,75 +6,148 @@ import {
   ArrowRight, Search, X
 } from 'lucide-react'
 
-// 模拟 AI 分析函数
-const analyzePaper = async (): Promise<Paper['analysis']> => {
-  // 模拟 API 调用延迟
-  await new Promise(resolve => setTimeout(resolve, 2000))
+// 真实的 AI 分析函数 - 调用后端 API
+const analyzePaper = async (url: string): Promise<{ paper: any; analysis: Paper['analysis'] }> => {
+  console.log('开始分析:', url);
+  
+  const response = await fetch('http://localhost:3001/api/analyze', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url }),
+  });
+  
+  console.log('响应状态:', response.status);
+  
+  if (!response.ok) {
+    throw new Error('分析失败: ' + response.status);
+  }
+  
+  const data = await response.json();
+  console.log('分析结果:', data);
   
   return {
-    researchGoal: '探索大规模语言模型在特定任务上的性能表现，研究如何通过提示工程提升模型效果。',
-    methodology: '采用对比实验方法，在多个基准数据集上测试不同提示策略的效果，包括零样本、少样本和思维链提示。',
-    contributions: [
-      '提出了一种新的提示工程框架',
-      '系统性地评估了不同提示策略的效果',
-      '发现了模型规模与提示效果的非线性关系'
-    ],
-    results: '实验表明，思维链提示在数学推理任务上提升 15%，少样本学习在分类任务上提升 8%。',
-    pros: [
-      '实验设计严谨，样本量充足',
-      '提供了详细的消融实验',
-      '代码开源可复现'
-    ],
-    cons: [
-      '仅测试了英文任务',
-      '未考虑推理效率',
-      '部分边界情况未覆盖'
-    ],
-    scores: {
-      innovation: 7,
-      completeness: 8,
-      practicality: 9
-    }
-  }
+    paper: data.paper,
+    analysis: data.analysis
+  };
 }
 
 export const PaperAnalyzer: React.FC = () => {
-  const { papers, addPaper, updatePaper } = useAgentStore()
+  const { papers, addPaper, updatePaper, deletePaper } = useAgentStore()
   const [inputMode, setInputMode] = useState<'url' | 'pdf'>('url')
   const [inputValue, setInputValue] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null)
   
+  // 当 papers 变化时，更新 selectedPaper
+  useEffect(() => {
+    if (selectedPaper) {
+      const updated = papers.find(p => p.id === selectedPaper.id)
+      if (updated) {
+        setSelectedPaper(updated)
+      }
+    }
+  }, [papers])
+  
+  // 删除论文
+  const handleDelete = () => {
+    if (selectedPaper?.id) {
+      deletePaper(selectedPaper.id)
+      setSelectedPaper(null)
+    }
+  }
+  
+  // 导出报告
+  const handleExport = () => {
+    if (!selectedPaper?.analysis) return
+    
+    const { analysis, title, authors } = selectedPaper
+    const report = `# 论文分析报告
+
+## 基本信息
+- **标题**: ${title}
+- **作者**: ${authors?.join(', ') || 'Unknown'}
+
+## 研究目标
+${analysis.researchGoal}
+
+## 方法论
+${analysis.methodology}
+
+## 主要贡献
+${analysis.contributions?.map((c, i) => `${i + 1}. ${c}`).join('\n') || 'N/A'}
+
+## 实验结果
+${analysis.results}
+
+## 优点
+${analysis.pros?.map((p, i) => `- ${p}`).join('\n') || 'N/A'}
+
+## 缺点/局限性
+${analysis.cons?.map((c, i) => `- ${c}`).join('\n') || 'N/A'}
+
+## 评分
+- 创新性: ${analysis.scores?.innovation}/10
+- 完整性: ${analysis.scores?.completeness}/10
+- 实用性: ${analysis.scores?.practicality}/10
+`
+    
+    const blob = new Blob([report], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title?.slice(0, 20) || 'paper'}-analysis.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  
   // 提交论文进行分析
   const handleSubmit = async () => {
     if (!inputValue.trim()) return
     
+    const inputUrl = inputValue.startsWith('http') ? inputValue : `https://${inputValue}`;
+    
     const newPaper: Omit<Paper, 'id' | 'createdAt' | 'status'> = {
-      title: inputValue.includes('arxiv') ? 'arXiv 论文' : '论文分析',
+      title: '分析中...',
       authors: [],
       abstract: '',
-      url: inputValue.startsWith('http') ? inputValue : undefined,
+      url: inputUrl,
       keywords: [],
-      analysis: undefined
+      analysis: undefined,
+      status: 'analyzing'
     }
     
+    // 先添加论文
     addPaper(newPaper)
     setInputValue('')
     
+    // 从 store 获取最新的论文列表
+    const allPapers = useAgentStore.getState().papers
+    const paperId = allPapers[allPapers.length - 1].id
+    console.log('论文ID:', paperId)
+    
     // 开始分析
     setIsAnalyzing(true)
-    const paperId = papers.length.toString()
     
     try {
-      // 模拟分析过程
-      const result = await analyzePaper()
+      // 调用真实 API
+      const result = await analyzePaper(inputUrl)
+      console.log('分析完成，更新论文:', paperId, result)
       updatePaper(paperId, { 
         status: 'completed', 
-        analysis: result,
-        title: '大型语言模型的提示工程研究'
+        analysis: result.analysis,
+        title: result.paper.title,
+        authors: result.paper.authors || [],
+        abstract: result.paper.abstract || '',
+        publishedDate: result.paper.publishedDate
       })
+      console.log('论文已更新')
     } catch (error) {
       console.error(error)
+      updatePaper(paperId, { 
+        status: 'failed'
+      })
     } finally {
       setIsAnalyzing(false)
     }
@@ -381,11 +454,17 @@ export const PaperAnalyzer: React.FC = () => {
             
             {/* Footer */}
             <div className="flex justify-end gap-3 p-4 border-t border-gray-800">
-              <button className="flex items-center gap-2 px-4 py-2 bg-[#0f0f1a] text-gray-400 rounded-lg hover:bg-gray-800">
+              <button 
+                onClick={handleDelete}
+                className="flex items-center gap-2 px-4 py-2 bg-[#0f0f1a] text-gray-400 rounded-lg hover:bg-gray-800"
+              >
                 <Trash2 className="w-4 h-4" />
                 删除
               </button>
-              <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg">
+              <button 
+                onClick={handleExport}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg"
+              >
                 <Download className="w-4 h-4" />
                 导出报告
               </button>
